@@ -33,7 +33,7 @@ async function startServer() {
 
         console.log('MongoDB connected successfully');
 
-        const db = client.db('travelgo');
+        const db = client.db('Travel Go');
         const users = db.collection('users');
 
         // REGISTER
