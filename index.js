@@ -3,7 +3,7 @@ const express = require('express');
 const app = express();
 const bcrypt=require('bcrypt');
 const jwt=require('jsonwebtoken');
-const port = 5050;
+const port = process.env.PORT || 5050;
 const cors = require('cors'); 
 
 app.use(cors());
@@ -15,12 +15,10 @@ app.get('/', (req, res) => {
 });
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
-const { config } = require('dotenv');
 
 const uri = process.env.MONGO_URI;
 
 const client = new MongoClient(uri, {
-    family: 4,
     serverApi: { 
         version: ServerApiVersion.v1,
         strict: true,
@@ -186,6 +184,6 @@ app.post('/login', async (req, res) => {
 
 run();
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
     console.log(`Connected to port ${port}`);
 });
