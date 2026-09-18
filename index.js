@@ -112,7 +112,7 @@ async function startServer() {
 
                 const token = jwt.sign(
     { id: user._id, username: user.username },
-    jwtSecret,
+    JWT_SECRET,
     { expiresIn: '1d' }
 );
 
