@@ -13,9 +13,15 @@ app.use(cors());
 app.use(express.json());
 
 const uri = process.env.MONGO_URI;
+const jwtSecret = process.env.JWT_SECRET;
 
 if (!uri) {
     console.error('MONGO_URI is not defined');
+    process.exit(1);
+}
+
+if (!jwtSecret) {
+    console.error('JWT_SECRET is not defined');
     process.exit(1);
 }
 
@@ -105,10 +111,10 @@ async function startServer() {
                 }
 
                 const token = jwt.sign(
-                    { id: user._id, username: user.username },
-                    process.env.JWT_SECRET,
-                    { expiresIn: '1d' }
-                );
+    { id: user._id, username: user.username },
+    jwtSecret,
+    { expiresIn: '1d' }
+);
 
                 res.json({
                     message: 'Login successful',
