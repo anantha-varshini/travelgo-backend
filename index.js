@@ -20,7 +20,7 @@ if (!uri) {
     process.exit(1);
 }
 
-if (!jwtSecret) {
+if (!jwtSecret) { 
     console.error('JWT_SECRET is not defined');
     process.exit(1);
 }
@@ -28,7 +28,7 @@ if (!jwtSecret) {
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
-        strict: true,
+        strict: true, 
         deprecationErrors: true,
     }
 });
