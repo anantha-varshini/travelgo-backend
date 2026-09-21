@@ -7,7 +7,6 @@ const cors = require('cors');
 const { MongoClient, ServerApiVersion } = require('mongodb');
 
 const app = express();
-const port = process.env.PORT || 5050;
 
 app.use(cors());
 app.use(express.json());
@@ -16,134 +15,152 @@ const uri = process.env.MONGO_URI;
 const jwtSecret = process.env.JWT_SECRET;
 
 if (!uri) {
-    console.error('MONGO_URI is not defined');
-    process.exit(1);
+    throw new Error('MONGO_URI is not defined');
 }
 
-if (!jwtSecret) { 
-    console.error('JWT_SECRET is not defined');
-    process.exit(1);
+if (!jwtSecret) {
+    throw new Error('JWT_SECRET is not defined');
 }
 
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
-        strict: true, 
+        strict: true,
         deprecationErrors: true,
     }
 });
 
-async function startServer() {
+let users;
+
+// Connect to MongoDB once
+async function connectDB() {
+    if (users) {
+        return users;
+    }
+
+    await client.connect();
+
+    console.log('MongoDB connected successfully');
+
+    const db = client.db('Travelgo');
+    users = db.collection('users');
+
+    return users;
+}
+
+// TEST ROUTE
+app.get('/', async (req, res) => {
     try {
-        await client.connect();
+        await connectDB();
 
-        console.log('MongoDB connected successfully');
+        res.json({
+            message: 'TravelGo backend is running'
+        });
+    } catch (error) {
+        console.error('Database connection error:', error);
 
-        const db = client.db('Travelgo');
-        const users = db.collection('users');
+        res.status(500).json({
+            message: 'Database connection failed'
+        });
+    }
+});
 
-        // REGISTER
-        app.post('/register', async (req, res) => {
-            try {
-                const { username, password } = req.body;
+// REGISTER
+app.post('/register', async (req, res) => {
+    try {
+        const users = await connectDB();
 
-                if (!username || !password) {
-                    return res.status(400).json({
-                        message: 'Username and password are required'
-                    });
-                }
+        const { username, password } = req.body;
 
-                const existingUser = await users.findOne({ username });
+        if (!username || !password) {
+            return res.status(400).json({
+                message: 'Username and password are required'
+            });
+        }
 
-                if (existingUser) {
-                    return res.status(400).json({
-                        message: 'Username already exists'
-                    });
-                }
+        const existingUser = await users.findOne({ username });
 
-                const hashedPassword = await bcrypt.hash(password, 10);
+        if (existingUser) {
+            return res.status(400).json({
+                message: 'Username already exists'
+            });
+        }
 
-                await users.insertOne({
-                    username,
-                    password: hashedPassword
-                });
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-                res.status(201).json({
-                    message: 'Registration successful'
-                });
-
-            } catch (error) {
-                console.error('Register error:', error);
-                res.status(500).json({
-                    message: 'Registration failed'
-                });
-            }
+        await users.insertOne({
+            username,
+            password: hashedPassword
         });
 
-        // LOGIN
-        app.post('/login', async (req, res) => {
-            try {
-                const { username, password } = req.body;
-
-                if (!username || !password) {
-                    return res.status(400).json({
-                        message: 'Username and password are required'
-                    });
-                }
-
-                const user = await users.findOne({ username });
-
-                if (!user) {
-                    return res.status(401).json({
-                        message: 'Invalid username or password'
-                    });
-                }
-
-                const passwordMatch = await bcrypt.compare(
-                    password,
-                    user.password
-                );
-
-                if (!passwordMatch) {
-                    return res.status(401).json({
-                        message: 'Invalid username or password'
-                    });
-                }
-
-                const token = jwt.sign(
-    { id: user._id, username: user.username },
-    JWT_SECRET,
-    { expiresIn: '1d' }
-);
-
-                res.json({
-                    message: 'Login successful',
-                    token
-                });
-
-            } catch (error) {
-                console.error('Login error:', error);
-                res.status(500).json({
-                    message: 'Login failed'
-                });
-            }
-        });
-
-        // TEST ROUTE
-        app.get('/', (req, res) => {
-            res.send('TravelGo backend is running');
-        });
-
-        app.listen(port, '0.0.0.0', () => {
-            console.log(`Server running on port ${port}`);
+        res.status(201).json({
+            message: 'Registration successful'
         });
 
     } catch (error) {
-        console.error('MongoDB connection failed:', error);
-        process.exit(1);
+        console.error('Register error:', error);
+
+        res.status(500).json({
+            message: 'Registration failed'
+        });
     }
-}
+});
 
-startServer();
+// LOGIN
+app.post('/login', async (req, res) => {
+    try {
+        const users = await connectDB();
 
-module.exports=app;
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({
+                message: 'Username and password are required'
+            });
+        }
+
+        const user = await users.findOne({ username });
+
+        if (!user) {
+            return res.status(401).json({
+                message: 'Invalid username or password'
+            });
+        }
+
+        const passwordMatch = await bcrypt.compare(
+            password,
+            user.password
+        );
+
+        if (!passwordMatch) {
+            return res.status(401).json({
+                message: 'Invalid username or password'
+            });
+        }
+
+        const token = jwt.sign(
+            {
+                id: user._id.toString(),
+                username: user.username
+            },
+            jwtSecret,
+            {
+                expiresIn: '1d'
+            }
+        );
+
+        res.json({
+            message: 'Login successful',
+            token
+        });
+
+    } catch (error) {
+        console.error('Login error:', error);
+
+        res.status(500).json({
+            message: 'Login failed'
+        });
+    }
+});
+
+module.exports = app;
