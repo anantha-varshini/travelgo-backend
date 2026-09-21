@@ -45,7 +45,7 @@ const client = new MongoClient(uri, {
 // MongoDB collections
 let users;
 let bookings;
-let contacts;
+let contact;
 
 // ===============================
 // CONNECT TO MONGODB
@@ -54,11 +54,11 @@ let contacts;
 async function connectDB() {
 
     // If already connected, don't connect again
-    if (users && bookings && contacts) {
+    if (users && bookings && contact) {
         return {
             users,
             bookings,
-            contacts
+            contact
         };
     }
 
@@ -70,12 +70,12 @@ async function connectDB() {
 
     users = db.collection('users');
     bookings = db.collection('bookings');
-    contacts = db.collection('contacts');
+    contact = db.collection('contact');
 
     return {
         users,
         bookings,
-        contacts
+        contact
     };
 }
 
@@ -303,7 +303,7 @@ app.post('/contact', async (req, res) => {
 
     try {
 
-        const { contacts } = await connectDB();
+        const { contact } = await connectDB();
 
         const {
             name,
@@ -320,7 +320,7 @@ app.post('/contact', async (req, res) => {
         }
 
         // Save contact message
-        await contacts.insertOne({
+        await contact.insertOne({
             name,
             email,
             message,
