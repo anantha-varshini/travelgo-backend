@@ -8,8 +8,16 @@ const { MongoClient, ServerApiVersion } = require('mongodb');
 
 const app = express();
 
+// ===============================
+// MIDDLEWARE
+// ===============================
+
 app.use(cors());
 app.use(express.json());
+
+// ===============================
+// ENVIRONMENT VARIABLES
+// ===============================
 
 const uri = process.env.MONGO_URI;
 const jwtSecret = process.env.JWT_SECRET;
@@ -22,20 +30,36 @@ if (!jwtSecret) {
     throw new Error('JWT_SECRET is not defined');
 }
 
+// ===============================
+// MONGODB CLIENT
+// ===============================
+
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
         strict: true,
-        deprecationErrors: true,
+        deprecationErrors: true
     }
 });
 
+// MongoDB collections
 let users;
+let bookings;
+let contacts;
 
-// Connect to MongoDB once
+// ===============================
+// CONNECT TO MONGODB
+// ===============================
+
 async function connectDB() {
-    if (users) {
-        return users;
+
+    // If already connected, don't connect again
+    if (users && bookings && contacts) {
+        return {
+            users,
+            bookings,
+            contacts
+        };
     }
 
     await client.connect();
@@ -43,20 +67,34 @@ async function connectDB() {
     console.log('MongoDB connected successfully');
 
     const db = client.db('Travelgo');
-    users = db.collection('users');
 
-    return users;
+    users = db.collection('users');
+    bookings = db.collection('bookings');
+    contacts = db.collection('contacts');
+
+    return {
+        users,
+        bookings,
+        contacts
+    };
 }
 
+// ===============================
 // TEST ROUTE
+// ===============================
+
 app.get('/', async (req, res) => {
+
     try {
+
         await connectDB();
 
         res.json({
             message: 'TravelGo backend is running'
         });
+
     } catch (error) {
+
         console.error('Database connection error:', error);
 
         res.status(500).json({
@@ -65,32 +103,49 @@ app.get('/', async (req, res) => {
     }
 });
 
+// ===============================
 // REGISTER
+// ===============================
+
 app.post('/register', async (req, res) => {
+
     try {
-        const users = await connectDB();
+
+        const { users } = await connectDB();
 
         const { username, password } = req.body;
 
+        // Check required fields
         if (!username || !password) {
+
             return res.status(400).json({
                 message: 'Username and password are required'
             });
         }
 
-        const existingUser = await users.findOne({ username });
+        // Check if user already exists
+        const existingUser = await users.findOne({
+            username
+        });
 
         if (existingUser) {
+
             return res.status(400).json({
                 message: 'Username already exists'
             });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // Hash password
+        const hashedPassword = await bcrypt.hash(
+            password,
+            10
+        );
 
+        // Save user
         await users.insertOne({
             username,
-            password: hashedPassword
+            password: hashedPassword,
+            createdAt: new Date()
         });
 
         res.status(201).json({
@@ -98,6 +153,7 @@ app.post('/register', async (req, res) => {
         });
 
     } catch (error) {
+
         console.error('Register error:', error);
 
         res.status(500).json({
@@ -106,38 +162,52 @@ app.post('/register', async (req, res) => {
     }
 });
 
+// ===============================
 // LOGIN
+// ===============================
+
 app.post('/login', async (req, res) => {
+
     try {
-        const users = await connectDB();
+
+        const { users } = await connectDB();
 
         const { username, password } = req.body;
 
+        // Check required fields
         if (!username || !password) {
+
             return res.status(400).json({
                 message: 'Username and password are required'
             });
         }
 
-        const user = await users.findOne({ username });
+        // Find user
+        const user = await users.findOne({
+            username
+        });
 
         if (!user) {
+
             return res.status(401).json({
                 message: 'Invalid username or password'
             });
         }
 
+        // Compare password
         const passwordMatch = await bcrypt.compare(
             password,
             user.password
         );
 
         if (!passwordMatch) {
+
             return res.status(401).json({
                 message: 'Invalid username or password'
             });
         }
 
+        // Create JWT token
         const token = jwt.sign(
             {
                 id: user._id.toString(),
@@ -155,6 +225,7 @@ app.post('/login', async (req, res) => {
         });
 
     } catch (error) {
+
         console.error('Login error:', error);
 
         res.status(500).json({
@@ -162,5 +233,116 @@ app.post('/login', async (req, res) => {
         });
     }
 });
+
+// ===============================
+// BOOKINGS
+// ===============================
+
+app.post('/bookings', async (req, res) => {
+
+    try {
+
+        const { bookings } = await connectDB();
+
+        const {
+            name,
+            email,
+            phone,
+            destination,
+            date,
+            travellers,
+            requests
+        } = req.body;
+
+        // Validate required fields
+        if (
+            !name ||
+            !email ||
+            !phone ||
+            !destination ||
+            !date ||
+            !travellers
+        ) {
+
+            return res.status(400).json({
+                message: 'Please fill in all required fields'
+            });
+        }
+
+        // Save booking
+        await bookings.insertOne({
+            name,
+            email,
+            phone,
+            destination,
+            date,
+            travellers: Number(travellers),
+            requests: requests || '',
+            createdAt: new Date()
+        });
+
+        res.status(201).json({
+            message: 'Booking created successfully'
+        });
+
+    } catch (error) {
+
+        console.error('Booking error:', error);
+
+        res.status(500).json({
+            message: 'Failed to create booking'
+        });
+    }
+});
+
+// ===============================
+// CONTACT
+// ===============================
+
+app.post('/contact', async (req, res) => {
+
+    try {
+
+        const { contacts } = await connectDB();
+
+        const {
+            name,
+            email,
+            message
+        } = req.body;
+
+        // Validate required fields
+        if (!name || !email || !message) {
+
+            return res.status(400).json({
+                message: 'Name, email and message are required'
+            });
+        }
+
+        // Save contact message
+        await contacts.insertOne({
+            name,
+            email,
+            message,
+            createdAt: new Date()
+        });
+
+        res.status(201).json({
+            message: 'Message sent successfully'
+        });
+
+    } catch (error) {
+
+        console.error('Contact error:', error);
+
+        res.status(500).json({
+            message: 'Failed to save contact message'
+        });
+    }
+});
+
+// ===============================
+// EXPORT APP
+// ===============================
 
 module.exports = app;
