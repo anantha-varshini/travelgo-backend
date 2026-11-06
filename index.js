@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 
 const express = require('express');
@@ -9,12 +10,15 @@ const { MongoClient, ServerApiVersion } = require('mongodb');
 const app = express();
 
 // MIDDLEWARE
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
-app.use(cors());
 app.use(express.json());
 
 // ENVIRONMENT VARIABLES
-
 const uri = process.env.MONGO_URI;
 const jwtSecret = process.env.JWT_SECRET;
 
@@ -27,7 +31,6 @@ if (!jwtSecret) {
 }
 
 // MONGODB CLIENT
-
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
@@ -36,55 +39,52 @@ const client = new MongoClient(uri, {
     }
 });
 
-// MongoDB collections
+// DATABASE COLLECTIONS
 let users;
 let bookings;
 let contact;
 
+let dbConnection;
+
 // CONNECT TO MONGODB
-
 async function connectDB() {
-
-    // If already connected, don't connect again
     if (users && bookings && contact) {
-        return {
-            users,
-            bookings,
-            contact
-        };
+        return { users, bookings, contact };
     }
 
-    await client.connect();
+    if (!dbConnection) {
+        dbConnection = (async () => {
+            await client.connect();
 
-    console.log('MongoDB connected successfully');
+            console.log('MongoDB connected successfully');
 
-    const db = client.db('Travelgo');
+            const db = client.db('Travelgo');
 
-    users = db.collection('users');
-    bookings = db.collection('bookings');
-    contact = db.collection('contact');
+            users = db.collection('users');
+            bookings = db.collection('bookings');
+            contact = db.collection('contact');
 
-    return {
-        users,
-        bookings,
-        contact
-    };
+            return { users, bookings, contact };
+        })().catch(error => {
+            dbConnection = null;
+            throw error;
+        });
+    }
+
+    return dbConnection;
 }
 
-// TEST ROUTE
-
+// HEALTH CHECK
 app.get('/', async (req, res) => {
-
     try {
-
         await connectDB();
 
-        res.json({
-            message: 'TravelGo backend is running'
+        res.status(200).json({
+            message: 'TravelGo backend is running',
+            database: 'MongoDB connected'
         });
 
     } catch (error) {
-
         console.error('Database connection error:', error);
 
         res.status(500).json({
@@ -94,89 +94,99 @@ app.get('/', async (req, res) => {
 });
 
 // REGISTER
-
 app.post('/register', async (req, res) => {
-
     try {
-
         const { users } = await connectDB();
 
         const { username, password } = req.body;
 
-        // Check required fields
         if (!username || !password) {
-
             return res.status(400).json({
                 message: 'Username and password are required'
             });
         }
 
-        // Check if user already exists
+        const cleanUsername = username.trim();
+
+        if (!cleanUsername) {
+            return res.status(400).json({
+                message: 'Username cannot be empty'
+            });
+        }
+
+        // Check existing username
         const existingUser = await users.findOne({
-            username
+            username: cleanUsername
         });
 
         if (existingUser) {
-
             return res.status(400).json({
                 message: 'Username already exists'
             });
         }
 
         // Hash password
-        const hashedPassword = await bcrypt.hash(
-            password,
-            10
-        );
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Save user
+        // Insert user
         await users.insertOne({
-            username,
+            username: cleanUsername,
             password: hashedPassword,
             createdAt: new Date()
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             message: 'Registration successful'
         });
 
     } catch (error) {
-
         console.error('Register error:', error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Registration failed'
         });
     }
 });
 
 // LOGIN
-
 app.post('/login', async (req, res) => {
-
     try {
-
         const { users } = await connectDB();
 
         const { username, password } = req.body;
 
-        // Check required fields
         if (!username || !password) {
-
             return res.status(400).json({
                 message: 'Username and password are required'
             });
         }
 
+        const cleanUsername = username.trim();
+
         // Find user
         const user = await users.findOne({
-            username
+            username: cleanUsername
         });
 
         if (!user) {
-
             return res.status(401).json({
                 message: 'Invalid username or password'
+            });
+        }
+
+        console.log('Login user found:', user.username);
+        console.log('Password field exists:', !!user.password);
+        console.log('Password field type:', typeof user.password);
+
+        // Validate stored password
+        if (
+            typeof user.password !== 'string' ||
+            !user.password.startsWith('$2')
+        ) {
+            console.error('Invalid bcrypt password hash');
+
+            return res.status(500).json({
+                message: 'Stored password format is invalid'
             });
         }
 
@@ -187,13 +197,12 @@ app.post('/login', async (req, res) => {
         );
 
         if (!passwordMatch) {
-
             return res.status(401).json({
                 message: 'Invalid username or password'
             });
         }
 
-        // Create JWT token
+        // Generate JWT
         const token = jwt.sign(
             {
                 id: user._id.toString(),
@@ -205,27 +214,23 @@ app.post('/login', async (req, res) => {
             }
         );
 
-        res.json({
+        return res.status(200).json({
             message: 'Login successful',
             token
         });
 
     } catch (error) {
-
         console.error('Login error:', error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Login failed'
         });
     }
 });
 
 // BOOKINGS
-
 app.post('/bookings', async (req, res) => {
-
     try {
-
         const { bookings } = await connectDB();
 
         const {
@@ -238,7 +243,6 @@ app.post('/bookings', async (req, res) => {
             requests
         } = req.body;
 
-        // Validate required fields
         if (
             !name ||
             !email ||
@@ -247,13 +251,11 @@ app.post('/bookings', async (req, res) => {
             !date ||
             !travellers
         ) {
-
             return res.status(400).json({
                 message: 'Please fill in all required fields'
             });
         }
 
-        // Save booking
         await bookings.insertOne({
             name,
             email,
@@ -265,43 +267,32 @@ app.post('/bookings', async (req, res) => {
             createdAt: new Date()
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             message: 'Booking created successfully'
         });
 
     } catch (error) {
-
         console.error('Booking error:', error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Failed to create booking'
         });
     }
 });
 
 // CONTACT
-
 app.post('/contact', async (req, res) => {
-
     try {
-
         const { contact } = await connectDB();
 
-        const {
-            name,
-            email,
-            message
-        } = req.body;
+        const { name, email, message } = req.body;
 
-        // Validate required fields
         if (!name || !email || !message) {
-
             return res.status(400).json({
                 message: 'Name, email and message are required'
             });
         }
 
-        // Save contact message
         await contact.insertOne({
             name,
             email,
@@ -309,18 +300,18 @@ app.post('/contact', async (req, res) => {
             createdAt: new Date()
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             message: 'Message sent successfully'
         });
 
     } catch (error) {
-
         console.error('Contact error:', error);
 
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Failed to save contact message'
         });
     }
 });
 
+// EXPORT FOR VERCEL
 module.exports = app;
