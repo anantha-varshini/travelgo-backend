@@ -8,16 +8,12 @@ const { MongoClient, ServerApiVersion } = require('mongodb');
 
 const app = express();
 
-// ===============================
 // MIDDLEWARE
-// ===============================
 
 app.use(cors());
 app.use(express.json());
 
-// ===============================
 // ENVIRONMENT VARIABLES
-// ===============================
 
 const uri = process.env.MONGO_URI;
 const jwtSecret = process.env.JWT_SECRET;
@@ -30,9 +26,7 @@ if (!jwtSecret) {
     throw new Error('JWT_SECRET is not defined');
 }
 
-// ===============================
 // MONGODB CLIENT
-// ===============================
 
 const client = new MongoClient(uri, {
     serverApi: {
@@ -47,9 +41,7 @@ let users;
 let bookings;
 let contact;
 
-// ===============================
 // CONNECT TO MONGODB
-// ===============================
 
 async function connectDB() {
 
@@ -79,9 +71,7 @@ async function connectDB() {
     };
 }
 
-// ===============================
 // TEST ROUTE
-// ===============================
 
 app.get('/', async (req, res) => {
 
@@ -103,9 +93,7 @@ app.get('/', async (req, res) => {
     }
 });
 
-// ===============================
 // REGISTER
-// ===============================
 
 app.post('/register', async (req, res) => {
 
@@ -162,9 +150,7 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// ===============================
 // LOGIN
-// ===============================
 
 app.post('/login', async (req, res) => {
 
@@ -234,9 +220,7 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// ===============================
 // BOOKINGS
-// ===============================
 
 app.post('/bookings', async (req, res) => {
 
@@ -295,9 +279,7 @@ app.post('/bookings', async (req, res) => {
     }
 });
 
-// ===============================
 // CONTACT
-// ===============================
 
 app.post('/contact', async (req, res) => {
 
@@ -340,9 +322,5 @@ app.post('/contact', async (req, res) => {
         });
     }
 });
-
-// ===============================
-// EXPORT APP
-// ===============================
 
 module.exports = app;
